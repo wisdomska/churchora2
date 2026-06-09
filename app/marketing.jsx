@@ -25,13 +25,13 @@ function useReveal(threshold = 0.09) {
   return [ref, visible];
 }
 
-function Reveal({ children, delay = 0, distance = 26, style, className }) {
+function Reveal({ children, delay = 0, distance = 40, style, className }) {
   const [ref, visible] = useReveal(0.08);
   return (
     <div ref={ref} className={className} style={{
       opacity: visible ? 1 : 0,
-      transform: visible ? "none" : `translateY(${distance}px)`,
-      transition: `opacity .7s ${delay}s cubic-bezier(.22,.61,.36,1), transform .7s ${delay}s cubic-bezier(.22,.61,.36,1)`,
+      transform: visible ? "none" : `translateY(${distance}px) scale(0.96)`,
+      transition: `opacity .8s ${delay}s cubic-bezier(.22,.61,.36,1), transform .8s ${delay}s cubic-bezier(.22,.61,.36,1)`,
       willChange: "opacity, transform",
       ...style,
     }}>{children}</div>
@@ -39,7 +39,7 @@ function Reveal({ children, delay = 0, distance = 26, style, className }) {
 }
 
 function AnimSection({ id, children, style, padding }) {
-  const outerRef = React.useRef(null);
+  const outerRef  = React.useRef(null);
   const [scale,    setScale]    = React.useState(1);
   const [opacity,  setOpacity]  = React.useState(1);
   const [revealed, setRevealed] = React.useState(false);
@@ -47,18 +47,22 @@ function AnimSection({ id, children, style, padding }) {
   React.useEffect(() => {
     const el = document.getElementById("site-scroll");
     if (!el) return;
+
+    // Appear: reveal when entering viewport
     const obs = new IntersectionObserver(([e]) => {
       if (e.isIntersecting) setRevealed(true);
-    }, { threshold: 0.05, root: el });
+    }, { threshold: 0.06, root: el });
     if (outerRef.current) obs.observe(outerRef.current);
+
+    // Exit: scale down to 0.70 as it scrolls above the viewport
     const update = () => {
       if (!outerRef.current) return;
-      const rect = outerRef.current.getBoundingClientRect();
+      const rect  = outerRef.current.getBoundingClientRect();
       const cRect = el.getBoundingClientRect();
-      const above = Math.max(0, (cRect.top + 72) - rect.top);
-      const pct = Math.min(above / Math.max(rect.height * 0.55, 1), 1);
-      setScale(1 - pct * 0.055);
-      setOpacity(1 - pct * 0.18);
+      const above = Math.max(0, (cRect.top + 60) - rect.top);
+      const pct   = Math.min(above / Math.max(rect.height * 0.6, 1), 1);
+      setScale(1 - pct * 0.30);          // 1 → 0.70
+      setOpacity(1 - pct * 0.50);        // 1 → 0.50
     };
     el.addEventListener("scroll", update, { passive: true });
     update();
@@ -66,12 +70,18 @@ function AnimSection({ id, children, style, padding }) {
   }, []);
 
   return (
-    <div ref={outerRef} style={{ transform: `scale(${scale}) translateZ(0)`, transformOrigin: "center top", transition: "transform .06s linear", opacity }}>
+    <div ref={outerRef} style={{
+      transform:       `scale(${scale}) translateZ(0)`,
+      transformOrigin: "center center",
+      transition:      "transform .05s linear, opacity .05s linear",
+      opacity,
+      willChange:      "transform, opacity",
+    }}>
       <section id={id} style={{
-        padding: padding || "80px 0",
+        padding:   padding || "80px 0",
         opacity:   revealed ? 1 : 0,
-        transform: revealed ? "none" : "translateY(32px)",
-        transition: "opacity .75s cubic-bezier(.22,.61,.36,1), transform .75s cubic-bezier(.22,.61,.36,1)",
+        transform: revealed ? "none" : "translateY(52px) scale(0.96)",
+        transition: "opacity .85s cubic-bezier(.22,.61,.36,1), transform .85s cubic-bezier(.22,.61,.36,1)",
         ...style,
       }}>{children}</section>
     </div>
@@ -79,7 +89,7 @@ function AnimSection({ id, children, style, padding }) {
 }
 
 /* ── Site Header ── */
-function SiteHeader({ go, user, onSignIn, goToSettings }) {
+function SiteHeader({ go, user, onSignIn, goToSettings, scrollTo }) {
   const { isMobileOrTablet } = useViewport();
   const [scrolled, setScrolled] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
@@ -98,9 +108,10 @@ function SiteHeader({ go, user, onSignIn, goToSettings }) {
   const authedLinks = ["Features", "Sermons", "Pricing"];
   const links = user ? authedLinks : publicLinks;
 
-  const scrollTo = (id) => {
-    document.getElementById(id.toLowerCase())?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const handleScrollTo = (id) => {
     setMenuOpen(false);
+    if (scrollTo) scrollTo(id);
+    else document.getElementById(id.toLowerCase())?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   return (
@@ -124,7 +135,7 @@ function SiteHeader({ go, user, onSignIn, goToSettings }) {
             <nav style={{ display: "flex", gap: 4, alignItems: "center" }}>
               {links.map(l => (
                 <a key={l} href={"#" + l.toLowerCase()}
-                  onClick={e => { e.preventDefault(); scrollTo(l); }}
+                  onClick={e => { e.preventDefault(); handleScrollTo(l); }}
                   style={{ padding: "8px 15px", fontSize: ".94rem", color: "var(--text-muted)", borderRadius: "var(--r-xs)", cursor: "pointer", transition: "color var(--dur) var(--ease)", fontWeight: 300 }}
                   onMouseEnter={e => e.currentTarget.style.color = "var(--text)"}
                   onMouseLeave={e => e.currentTarget.style.color = "var(--text-muted)"}>{l}</a>
@@ -186,7 +197,7 @@ function SiteHeader({ go, user, onSignIn, goToSettings }) {
         }}>
           <div style={{ padding: "12px 20px 20px", display: "flex", flexDirection: "column", gap: 4 }}>
             {links.map(l => (
-              <button key={l} onClick={() => scrollTo(l)} style={{
+              <button key={l} onClick={() => handleScrollTo(l)} style={{
                 textAlign: "left", padding: "13px 16px", borderRadius: "var(--r-sm)",
                 fontSize: "1.05rem", fontWeight: 300, color: "var(--text)",
                 background: "none", border: "none", cursor: "pointer",
@@ -653,17 +664,72 @@ function SiteFooter() {
 /* ── Root ── */
 function MarketingSite({ go, user, onSignIn, goToSettings, theme, setTheme, mode, setMode, onLogout }) {
   const [scrollY, setScrollY] = React.useState(0);
+  const lerpRef = React.useRef({ target: 0, current: 0, raf: null, touching: false });
+
+  /* Smooth-scroll lerp: intercepts wheel events and eases scrollTop */
   React.useEffect(() => {
     const el = document.getElementById("site-scroll");
     if (!el) return;
-    const fn = () => setScrollY(el.scrollTop);
-    el.addEventListener("scroll", fn, { passive: true });
-    return () => el.removeEventListener("scroll", fn);
+    const s = lerpRef.current;
+
+    const onWheel = (e) => {
+      e.preventDefault();
+      const max = el.scrollHeight - el.clientHeight;
+      s.target = Math.max(0, Math.min(max, s.target + e.deltaY));
+    };
+
+    /* Touch: let native momentum run, re-sync when done */
+    const onTouchStart = () => { s.touching = true; };
+    const onTouchEnd   = () => {
+      setTimeout(() => {
+        s.touching = false;
+        s.target  = el.scrollTop;
+        s.current = el.scrollTop;
+      }, 400);
+    };
+    const onScroll = () => {
+      if (s.touching) { s.target = el.scrollTop; s.current = el.scrollTop; setScrollY(el.scrollTop); }
+    };
+
+    const tick = () => {
+      if (!s.touching) {
+        s.current += (s.target - s.current) * 0.09; // lerp — lower = lazier/smoother
+        if (Math.abs(s.current - s.target) < 0.4) s.current = s.target;
+        el.scrollTop = s.current;
+        setScrollY(Math.round(s.current));
+      }
+      s.raf = requestAnimationFrame(tick);
+    };
+
+    el.addEventListener("wheel",      onWheel,      { passive: false });
+    el.addEventListener("touchstart", onTouchStart, { passive: true  });
+    el.addEventListener("touchend",   onTouchEnd,   { passive: true  });
+    el.addEventListener("scroll",     onScroll,     { passive: true  });
+    s.raf = requestAnimationFrame(tick);
+
+    return () => {
+      el.removeEventListener("wheel",      onWheel);
+      el.removeEventListener("touchstart", onTouchStart);
+      el.removeEventListener("touchend",   onTouchEnd);
+      el.removeEventListener("scroll",     onScroll);
+      cancelAnimationFrame(s.raf);
+    };
+  }, []);
+
+  /* Programmatic smooth scroll for nav link clicks */
+  const scrollToSection = React.useCallback((id) => {
+    const target    = document.getElementById(id.toLowerCase());
+    const container = document.getElementById("site-scroll");
+    if (!target || !container) return;
+    const offset = target.getBoundingClientRect().top
+                 - container.getBoundingClientRect().top
+                 + lerpRef.current.current;
+    lerpRef.current.target = Math.max(0, offset - 80);
   }, []);
 
   return (
     <div id="site-scroll" className="scroll-area" style={{ height: "100%", overflowY: "auto", background: "var(--page)" }}>
-      <SiteHeader go={go} user={user} onSignIn={onSignIn} goToSettings={goToSettings} />
+      <SiteHeader go={go} user={user} onSignIn={onSignIn} goToSettings={goToSettings} scrollTo={scrollToSection} />
       <Hero go={go} scrollY={scrollY} />
       <TrustStrip />
       <Features />
