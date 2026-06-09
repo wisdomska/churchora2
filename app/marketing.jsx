@@ -120,7 +120,13 @@ function SiteHeader({ go, user, onSignIn, goToSettings, theme, setTheme, mode, s
 
         <nav style={{ display:"flex", gap:4, alignItems:"center" }}>
           {links.map(l => (
-            <a key={l} href={"#" + l.toLowerCase()} style={{ padding:"8px 15px", fontSize:".94rem", color:"var(--text-muted)", borderRadius:"var(--r-xs)", transition:"color var(--dur) var(--ease)", fontWeight:300 }}
+            <a key={l} href={"#" + l.toLowerCase()}
+              onClick={(e) => {
+                e.preventDefault();
+                document.getElementById(l.toLowerCase())
+                  ?.scrollIntoView({ behavior:"smooth", block:"start" });
+              }}
+              style={{ padding:"8px 15px", fontSize:".94rem", color:"var(--text-muted)", borderRadius:"var(--r-xs)", transition:"color var(--dur) var(--ease)", fontWeight:300, cursor:"pointer" }}
               onMouseEnter={e => e.currentTarget.style.color="var(--text)"}
               onMouseLeave={e => e.currentTarget.style.color="var(--text-muted)"}>{l}</a>
           ))}

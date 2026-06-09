@@ -8,9 +8,10 @@ function loadState() {
 function saveState(s) { try { localStorage.setItem(LS, JSON.stringify(s)); } catch {} }
 
 function useAuth() {
-  const [user, setUser] = React.useState(() => loadState().user || null);
-  const login  = (u) => { saveState({ ...loadState(), user: u }); setUser(u); };
-  const logout = ()  => { saveState({ ...loadState(), user: null }); setUser(null); };
+  // Always start signed out — session is not persisted across page loads
+  const [user, setUser] = React.useState(null);
+  const login  = (u) => { setUser(u); };
+  const logout = ()  => { setUser(null); };
   return { user, login, logout };
 }
 
