@@ -83,7 +83,104 @@ function HeroGiveCard() {
   );
 }
 
+function HeroCards({ scrollY }) {
+  const ref = React.useRef(null);
+  const [mouse, setMouse] = React.useState({ x: 0, y: 0 });
+  const [hovered, setHovered] = React.useState(false);
+  const rafRef = React.useRef(null);
+  const targetRef = React.useRef({ x: 0, y: 0 });
+  const currentRef = React.useRef({ x: 0, y: 0 });
+
+  /* smooth mouse tracking via rAF lerp */
+  React.useEffect(() => {
+    let running = true;
+    const tick = () => {
+      if (!running) return;
+      const t = targetRef.current, c = currentRef.current;
+      c.x += (t.x - c.x) * 0.09;
+      c.y += (t.y - c.y) * 0.09;
+      setMouse({ x: c.x, y: c.y });
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { running = false; cancelAnimationFrame(rafRef.current); };
+  }, []);
+
+  const onMove = (e) => {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    targetRef.current = {
+      x: (e.clientX - r.left) / r.width - 0.5,
+      y: (e.clientY - r.top)  / r.height - 0.5,
+    };
+  };
+  const onLeave = () => { targetRef.current = { x: 0, y: 0 }; setHovered(false); };
+  const onEnter = () => setHovered(true);
+
+  const parallaxOffset = scrollY * 0.06;
+  const tiltX = mouse.y * -10;
+  const tiltY = mouse.x *  10;
+  const ease = "transform 0.05s linear";
+
+  return (
+    <div
+      ref={ref}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+      onMouseEnter={onEnter}
+      className="anim-up"
+      style={{ animationDelay: ".1s", position: "relative", display: "flex", flexDirection: "column", gap: 18, perspective: 1200 }}
+    >
+      {/* Verse card — deeper parallax layer, stronger tilt */}
+      <div style={{
+        transform: `translateY(${-parallaxOffset * 1.0}px) rotateX(${tiltX * 0.9}deg) rotateY(${tiltY * 0.9}deg) scale(${hovered ? 1.025 : 1})`,
+        transition: hovered ? ease : "transform 0.6s cubic-bezier(.22,.61,.36,1)",
+        transformStyle: "preserve-3d",
+        willChange: "transform",
+        filter: hovered ? "drop-shadow(0 28px 40px rgba(0,0,0,.18))" : "none",
+      }}>
+        <HeroVerseCard />
+      </div>
+
+      {/* Give card — shallower layer, offset right, slower parallax */}
+      <div style={{
+        marginLeft: 48, marginRight: -8,
+        transform: `translateY(${-parallaxOffset * 0.55}px) rotateX(${tiltX * 0.5}deg) rotateY(${tiltY * 0.5}deg) scale(${hovered ? 1.015 : 1})`,
+        transition: hovered ? ease : "transform 0.75s cubic-bezier(.22,.61,.36,1)",
+        transformStyle: "preserve-3d",
+        willChange: "transform",
+        filter: hovered ? "drop-shadow(0 18px 28px rgba(0,0,0,.14))" : "none",
+      }}>
+        <HeroGiveCard />
+      </div>
+
+      {/* subtle floating glow that follows cursor */}
+      {hovered && (
+        <div style={{
+          position: "absolute", pointerEvents: "none",
+          width: 320, height: 320, borderRadius: "50%",
+          background: "radial-gradient(circle, var(--primary-tint) 0%, transparent 70%)",
+          opacity: 0.55,
+          left: `calc(50% + ${mouse.x * 120}px)`,
+          top:  `calc(50% + ${mouse.y * 120}px)`,
+          transform: "translate(-50%, -50%)",
+          transition: "left 0.05s linear, top 0.05s linear",
+        }} />
+      )}
+    </div>
+  );
+}
+
 function Hero({ go }) {
+  const [scrollY, setScrollY] = React.useState(0);
+  React.useEffect(() => {
+    const el = document.getElementById("site-scroll");
+    if (!el) return;
+    const fn = () => setScrollY(el.scrollTop);
+    el.addEventListener("scroll", fn, { passive: true });
+    return () => el.removeEventListener("scroll", fn);
+  }, []);
+
   return (
     <section style={{ position: "relative", paddingTop: 70, paddingBottom: 90, overflow: "hidden" }}>
       {/* soft radial glow */}
@@ -113,10 +210,7 @@ function Hero({ go }) {
             <span style={{ fontSize: ".88rem", color: "var(--text-muted)" }}>Trusted by <b style={{ fontWeight: 500, color: "var(--text)" }}>1,200+</b> congregations</span>
           </div>
         </div>
-        <div className="anim-up" style={{ animationDelay: ".1s", position: "relative", display: "flex", flexDirection: "column", gap: 18 }}>
-          <HeroVerseCard />
-          <div style={{ marginLeft: 48, marginRight: -8 }}><HeroGiveCard /></div>
-        </div>
+        <HeroCards scrollY={scrollY} />
       </Container>
     </section>
   );
