@@ -27,17 +27,25 @@ function useTranscript() {
   const [interim, setInterim]     = React.useState("");
   const [listening, setListening] = React.useState(false);
   const [supported, setSupported] = React.useState(true);
-  const recRef = React.useRef(null);
-  const activeRef = React.useRef(false);
+  const [error, setError]         = React.useState("");
+  const recRef       = React.useRef(null);
+  const activeRef    = React.useRef(false);
+  const restartTimer = React.useRef(null);
+
+  const SR = (typeof window !== "undefined") && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
   React.useEffect(() => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) setSupported(false);
+    // Tear down recognition if the component unmounts mid-listen.
+    return () => {
+      activeRef.current = false;
+      clearTimeout(restartTimer.current);
+      if (recRef.current) { try { recRef.current.stop(); } catch (e) {} }
+    };
   }, []);
 
-  const start = React.useCallback(() => {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) return;
+  // Build a fresh recognition instance with all handlers wired.
+  const build = React.useCallback(() => {
     const rec = new SR();
     rec.continuous = true;
     rec.interimResults = true;
@@ -51,17 +59,46 @@ function useTranscript() {
       if (fin) setFinalText(t => (t + fin).slice(-1200));
       setInterim(inter);
     };
-    rec.onend = () => { if (activeRef.current) rec.start(); };
-    rec.onerror = (e) => { if (e.error !== "aborted") console.warn("SR error", e.error); };
+    rec.onerror = (e) => {
+      if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+        activeRef.current = false; setListening(false);
+        setError("Microphone access is blocked. Allow mic access for this site in your browser, then start again.");
+      } else if (e.error === "audio-capture") {
+        activeRef.current = false; setListening(false);
+        setError("No microphone was found. Connect a mic and try again.");
+      }
+      // "no-speech" / "aborted" / "network" are transient — onend will restart.
+    };
+    rec.onend = () => {
+      // Chrome auto-stops continuous recognition periodically; restart while active.
+      if (!activeRef.current) { setListening(false); return; }
+      clearTimeout(restartTimer.current);
+      restartTimer.current = setTimeout(() => {
+        if (!activeRef.current) return;
+        try { rec.start(); }
+        catch (e) {
+          try { const fresh = build(); recRef.current = fresh; fresh.start(); } catch (e2) {}
+        }
+      }, 250);
+    };
+    return rec;
+  }, [SR]);
+
+  const start = React.useCallback(() => {
+    if (!SR) { setSupported(false); return; }
+    setError("");
+    const rec = build();
     recRef.current = rec;
     activeRef.current = true;
-    rec.start();
     setListening(true);
-  }, []);
+    try { rec.start(); }
+    catch (e) { /* InvalidStateError when already running — safe to ignore */ }
+  }, [SR, build]);
 
   const stop = React.useCallback(() => {
     activeRef.current = false;
-    if (recRef.current) { try { recRef.current.stop(); } catch(e) {} }
+    clearTimeout(restartTimer.current);
+    if (recRef.current) { try { recRef.current.stop(); } catch (e) {} }
     setListening(false);
     setInterim("");
   }, []);
@@ -71,7 +108,7 @@ function useTranscript() {
     setInterim("");
   }, []);
 
-  return { finalText, interim, listening, supported, start, stop, clear };
+  return { finalText, interim, listening, supported, error, start, stop, clear };
 }
 
 /* ── Verse matcher: finds the best matching verse given a rolling transcript ── */
@@ -133,7 +170,7 @@ function HighlightedVerse({ verseText, transcript }) {
 
 /* ── Transcript rail ── */
 function TranscriptRail({ onPushVerse }) {
-  const { finalText, interim, listening, supported, start, stop, clear } = useTranscript();
+  const { finalText, interim, listening, supported, error, start, stop, clear } = useTranscript();
   const scrollRef = React.useRef(null);
   const [match, setMatch] = React.useState(null);
   const [pushedRefs, setPushedRefs] = React.useState(new Set());
@@ -189,6 +226,13 @@ function TranscriptRail({ onPushVerse }) {
           </>
         )}
       </div>
+
+      {/* mic / permission error */}
+      {error && (
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "10px 12px", background: "var(--danger-tint)", borderRadius: "var(--r-sm)", color: "var(--danger)", fontSize: ".8rem", lineHeight: 1.45 }}>
+          <SIcon name="alert-triangle" size={14} style={{ flexShrink: 0, marginTop: 2 }} />{error}
+        </div>
+      )}
 
       {/* matched verse card */}
       {match ? (

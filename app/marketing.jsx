@@ -104,9 +104,7 @@ function SiteHeader({ go, user, onSignIn, goToSettings, scrollTo }) {
   // close menu on resize to desktop
   React.useEffect(() => { if (!isMobileOrTablet) setMenuOpen(false); }, [isMobileOrTablet]);
 
-  const publicLinks = ["Features", "Sermons", "Pricing", "Contact"];
-  const authedLinks = ["Features", "Sermons", "Pricing"];
-  const links = user ? authedLinks : publicLinks;
+  const links = ["Features", "Sermons", "App", "Pricing", "Contact"];
 
   const handleScrollTo = (id) => {
     setMenuOpen(false);
@@ -556,6 +554,188 @@ function Pricing({ go }) {
   );
 }
 
+/* ── Member App waitlist modal ── */
+function WaitlistModal({ onClose }) {
+  const [form, setForm] = React.useState({ name: "", email: "", church: "" });
+  const [company, setCompany] = React.useState(""); // honeypot
+  const [sending, setSending] = React.useState(false);
+  const [sent, setSent] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  const handle = (k) => (e) => { setForm(f => ({ ...f, [k]: e.target.value })); setError(""); };
+
+  React.useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.name.trim()) { setError("Please enter your name."); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) { setError("Please enter a valid email address."); return; }
+    setSending(true);
+    try {
+      const r = await fetch("/api/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "waitlist", name: form.name, email: form.email, church: form.church, company }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.ok) setSent(true);
+      else setError(data.error || "Something went wrong. Please try again.");
+    } catch (err) {
+      setError("Could not reach the server. Please check your connection and try again.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const overlay = (
+    <div onClick={onClose} style={{
+      position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center",
+      background: "rgba(0,0,0,.55)", backdropFilter: "blur(4px)", WebkitBackdropFilter: "blur(4px)", padding: 20,
+      animation: "ch-fade .2s ease",
+    }}>
+      <div onClick={e => e.stopPropagation()} className="anim-scale" style={{
+        width: "100%", maxWidth: 440, background: "var(--surface)", borderRadius: "var(--r-lg)",
+        border: "1px solid var(--border)", boxShadow: "0 30px 80px rgba(0,0,0,.35)", padding: 28, position: "relative",
+      }}>
+        <button onClick={onClose} aria-label="Close" style={{
+          position: "absolute", top: 16, right: 16, width: 34, height: 34, borderRadius: "50%",
+          background: "var(--surface-2)", border: "none", color: "var(--text-muted)", cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}><Icon name="x" size={17} /></button>
+
+        {sent ? (
+          <div style={{ textAlign: "center", padding: "16px 0 8px" }}>
+            <div style={{ width: 64, height: 64, borderRadius: "50%", background: "var(--success-tint)", color: "var(--success)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px" }}>
+              <Icon name="check" size={32} />
+            </div>
+            <h3 style={{ fontSize: "1.35rem", marginBottom: 8 }}>You're on the list!</h3>
+            <p className="muted" style={{ fontSize: ".95rem" }}>We'll email <b style={{ color: "var(--text)" }}>{form.email}</b> the moment the member app is ready.</p>
+            <button className="btn btn-primary btn-lg btn-block" style={{ marginTop: 22 }} onClick={onClose}>Done</button>
+          </div>
+        ) : (<>
+          <Eyebrow style={{ marginBottom: 10 }}>Member app · Waitlist</Eyebrow>
+          <h3 style={{ fontSize: "1.5rem", letterSpacing: "-.02em", marginBottom: 6 }}>Join the waitlist</h3>
+          <p className="muted" style={{ fontSize: ".92rem", marginBottom: 22 }}>Be first to know when the Churchora member app launches.</p>
+
+          <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div>
+              <label className="eyebrow" style={{ display: "block", marginBottom: 7 }}>Your name</label>
+              <input value={form.name} onChange={handle("name")} placeholder="Adwoa Mensah" className="field" autoComplete="name" />
+            </div>
+            <div>
+              <label className="eyebrow" style={{ display: "block", marginBottom: 7 }}>Email address</label>
+              <input type="email" value={form.email} onChange={handle("email")} placeholder="you@church.org" className="field" autoComplete="email" />
+            </div>
+            <div>
+              <label className="eyebrow" style={{ display: "block", marginBottom: 7 }}>Church</label>
+              <input value={form.church} onChange={handle("church")} placeholder="Grace Chapel International" className="field" />
+            </div>
+            {/* honeypot — hidden from humans */}
+            <input value={company} onChange={e => setCompany(e.target.value)} tabIndex={-1} autoComplete="off"
+              aria-hidden="true" style={{ position: "absolute", left: "-9999px", width: 1, height: 1, opacity: 0 }} />
+            {error && (
+              <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "11px 14px", background: "var(--danger-tint)", borderRadius: "var(--r-sm)", color: "var(--danger)", fontSize: ".87rem" }}>
+                <Icon name="alert-triangle" size={16} style={{ flexShrink: 0 }} />{error}
+              </div>
+            )}
+            <button type="submit" disabled={sending} className="btn btn-primary btn-lg btn-block" style={{ marginTop: 4 }}>
+              {sending ? (
+                <span style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ width: 16, height: 16, borderRadius: "50%", border: "2.5px solid rgba(255,255,255,.35)", borderTopColor: "#fff", animation: "ch-spin .7s linear infinite", display: "inline-block" }} />
+                  Joining…
+                </span>
+              ) : "Join the waitlist"}
+            </button>
+          </form>
+        </>)}
+      </div>
+      <style>{`@keyframes ch-fade { from { opacity: 0 } to { opacity: 1 } }`}</style>
+    </div>
+  );
+  // Portal to <body> so the overlay escapes any transformed/scrolling ancestor.
+  return ReactDOM.createPortal(overlay, document.body);
+}
+
+/* ── Member App showcase ── */
+function MemberAppShowcase() {
+  const { isMobile } = useViewport();
+  const [open, setOpen] = React.useState(false);
+  const bullets = [
+    { icon: "hand-coins", text: "Give in seconds — MTN MoMo, Vodafone Cash or card" },
+    { icon: "book-open",  text: "Verse of the day, saved and shareable" },
+    { icon: "cake",       text: "Birthdays, groups and your church life in one place" },
+  ];
+
+  return (
+    <AnimSection id="app">
+      <Container>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: isMobile ? 40 : 56, alignItems: "center" }}>
+          {/* copy */}
+          <Reveal>
+            <Eyebrow style={{ marginBottom: 14 }}>Member app · Coming soon</Eyebrow>
+            <h2 className="display" style={{ marginBottom: 16, fontSize: isMobile ? "1.9rem" : "2.6rem" }}>Your whole church, in their pocket.</h2>
+            <p className="lead" style={{ marginBottom: 26 }}>The Churchora member app brings giving, scripture and community to every member's phone. Be first in line when it launches.</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: 30 }}>
+              {bullets.map(b => (
+                <div key={b.text} style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ width: 34, height: 34, borderRadius: "var(--r-sm)", background: "var(--primary-tint)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                    <Icon name={b.icon} size={17} />
+                  </span>
+                  <span style={{ fontSize: ".98rem", color: "var(--text-muted)" }}>{b.text}</span>
+                </div>
+              ))}
+            </div>
+            <Btn variant="primary" size="lg" iconRight="arrow-right" onClick={() => setOpen(true)}>Join the Waitlist</Btn>
+          </Reveal>
+
+          {/* phone mockup */}
+          <Reveal style={{ display: "flex", justifyContent: "center" }}>
+            <div style={{
+              width: 258, borderRadius: 42, background: "var(--chrome)", padding: 12,
+              boxShadow: "0 30px 70px rgba(0,0,0,.28), 0 0 0 1px rgba(0,0,0,.08)", position: "relative",
+            }}>
+              <div style={{ position: "absolute", top: 22, left: "50%", transform: "translateX(-50%)", width: 92, height: 24, borderRadius: 16, background: "#000", zIndex: 5 }} />
+              <div style={{ background: "var(--page)", borderRadius: 32, overflow: "hidden", height: 488, display: "flex", flexDirection: "column" }}>
+                <div style={{ padding: "34px 20px 12px" }}>
+                  <div className="muted" style={{ fontSize: ".74rem" }}>Good morning</div>
+                  <div style={{ fontSize: "1.25rem", fontWeight: 500, letterSpacing: "-.02em" }}>Adwoa</div>
+                </div>
+                <div style={{ padding: "4px 16px", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
+                  <div style={{ background: "var(--primary)", borderRadius: "var(--r-md)", padding: "16px 16px 18px", color: "var(--primary-contrast)" }}>
+                    <div className="eyebrow" style={{ color: "var(--primary-contrast)", opacity: .75, marginBottom: 8 }}>Verse of the day</div>
+                    <div className="serif-verse" style={{ fontSize: "1.02rem", lineHeight: 1.4 }}>"The Lord is my shepherd; I shall not want."</div>
+                    <div style={{ fontSize: ".72rem", opacity: .75, marginTop: 10 }}>Psalm 23:1 · NKJV</div>
+                  </div>
+                  <button style={{ border: "none", background: "var(--primary-tint)", color: "var(--primary)", borderRadius: "var(--r-md)", padding: "14px 16px", display: "flex", alignItems: "center", gap: 10, fontFamily: "var(--font)", fontSize: ".95rem", fontWeight: 500, cursor: "default", textAlign: "left" }}>
+                    <Icon name="hand-coins" size={18} /> Give a tithe or offering
+                  </button>
+                  <div style={{ display: "flex", gap: 12 }}>
+                    {[["users", "Groups"], ["cake", "Birthdays"]].map(([ic, lb]) => (
+                      <div key={lb} style={{ flex: 1, background: "var(--surface-2)", borderRadius: "var(--r-md)", padding: "14px 12px", display: "flex", flexDirection: "column", gap: 8, color: "var(--text-muted)" }}>
+                        <Icon name={ic} size={18} /><span style={{ fontSize: ".82rem" }}>{lb}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-around", padding: "12px 0 16px", borderTop: "1px solid var(--border)" }}>
+                  {["layout-dashboard", "hand-coins", "book-open", "user"].map((ic, i) => (
+                    <Icon key={ic} name={ic} size={20} style={{ color: i === 0 ? "var(--primary)" : "var(--text-subtle)" }} />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </Container>
+      {open && <WaitlistModal onClose={() => setOpen(false)} />}
+    </AnimSection>
+  );
+}
+
 /* ── Contact ── */
 function ContactSection() {
   const { isMobile } = useViewport();
@@ -565,11 +745,24 @@ function ContactSection() {
   const [error, setError] = React.useState("");
 
   const handle = (k) => (e) => { setForm(f => ({ ...f, [k]: e.target.value })); setError(""); };
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     if (!form.name.trim() || !form.email.trim() || !form.message.trim()) { setError("Please fill in your name, email and message."); return; }
     setSending(true);
-    setTimeout(() => { setSending(false); setSent(true); }, 1100);
+    try {
+      const r = await fetch("/api/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "contact", name: form.name, email: form.email, subject: form.subject, message: form.message }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (r.ok && data.ok) setSent(true);
+      else setError(data.error || "Something went wrong sending your message. Please try again.");
+    } catch (err) {
+      setError("Could not reach the server. Please check your connection and try again.");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -734,6 +927,7 @@ function MarketingSite({ go, user, onSignIn, goToSettings, theme, setTheme, mode
       <TrustStrip />
       <Features />
       <SermonShowcase go={go} />
+      <MemberAppShowcase />
       <Pricing go={go} />
       <ContactSection />
       <SiteFooter />
