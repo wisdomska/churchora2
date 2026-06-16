@@ -664,6 +664,29 @@ function WaitlistModal({ onClose }) {
 function MemberAppShowcase() {
   const { isMobile } = useViewport();
   const [open, setOpen] = React.useState(false);
+
+  // Interactive 3D tilt that follows the cursor (eased), mirroring the hero cards.
+  const tiltRef = React.useRef(null);
+  const [m, setM] = React.useState({ x: 0, y: 0 });
+  const [hovered, setHovered] = React.useState(false);
+  const targetRef = React.useRef({ x: 0, y: 0 });
+  const currentRef = React.useRef({ x: 0, y: 0 });
+  React.useEffect(() => {
+    let running = true;
+    const tick = () => {
+      if (!running) return;
+      const t = targetRef.current, c = currentRef.current;
+      c.x += (t.x - c.x) * 0.09; c.y += (t.y - c.y) * 0.09;
+      setM({ x: c.x, y: c.y });
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    return () => { running = false; };
+  }, []);
+  const onMove  = (e) => { if (!tiltRef.current) return; const r = tiltRef.current.getBoundingClientRect(); targetRef.current = { x: (e.clientX-r.left)/r.width-.5, y: (e.clientY-r.top)/r.height-.5 }; };
+  const onLeave = () => { targetRef.current = { x: 0, y: 0 }; setHovered(false); };
+  const onEnter = () => setHovered(true);
+
   const bullets = [
     { icon: "hand-coins", text: "Give in seconds — MTN MoMo, Vodafone Cash or card" },
     { icon: "book-open",  text: "Verse of the day, saved and shareable" },
@@ -692,11 +715,27 @@ function MemberAppShowcase() {
             <Btn variant="primary" size="lg" iconRight="arrow-right" onClick={() => setOpen(true)}>Join the Waitlist</Btn>
           </Reveal>
 
-          {/* phone mockup */}
+          {/* phone mockup — ambient glow + interactive tilt */}
           <Reveal style={{ display: "flex", justifyContent: "center" }}>
+            <div ref={tiltRef} onMouseMove={onMove} onMouseEnter={onEnter} onMouseLeave={onLeave}
+              style={{ position: "relative", perspective: 1200, display: "flex", justifyContent: "center", padding: "14px 0" }}>
+              {/* ambient glow behind the device (follows cursor, like the hero) */}
+              <div style={{
+                position: "absolute", width: 440, height: 440, borderRadius: "50%",
+                background: "radial-gradient(circle, var(--primary-tint) 0%, transparent 68%)",
+                opacity: hovered ? 1 : .85,
+                left: `calc(50% + ${m.x * 70}px)`, top: `calc(50% + ${m.y * 70}px)`,
+                transform: "translate(-50%,-50%)", pointerEvents: "none",
+                transition: "left .05s linear, top .05s linear, opacity .3s",
+              }} />
             <div style={{
-              width: 258, borderRadius: 42, background: "var(--chrome)", padding: 12,
-              boxShadow: "0 30px 70px rgba(0,0,0,.28), 0 0 0 1px rgba(0,0,0,.08)", position: "relative",
+              width: 258, borderRadius: 42, background: "var(--chrome)", padding: 12, position: "relative",
+              boxShadow: hovered
+                ? "0 44px 90px rgba(0,0,0,.36), 0 0 0 1px rgba(0,0,0,.08)"
+                : "0 30px 70px rgba(0,0,0,.28), 0 0 0 1px rgba(0,0,0,.08)",
+              transform: `rotateX(${m.y * -8}deg) rotateY(${m.x * 10}deg) scale(${hovered ? 1.03 : 1})`,
+              transition: hovered ? "transform .05s linear, box-shadow .3s" : "transform .6s cubic-bezier(.22,.61,.36,1), box-shadow .3s",
+              transformStyle: "preserve-3d", willChange: "transform",
             }}>
               <div style={{ position: "absolute", top: 22, left: "50%", transform: "translateX(-50%)", width: 92, height: 24, borderRadius: 16, background: "#000", zIndex: 5 }} />
               <div style={{ background: "var(--page)", borderRadius: 32, overflow: "hidden", height: 488, display: "flex", flexDirection: "column" }}>
@@ -727,6 +766,7 @@ function MemberAppShowcase() {
                   ))}
                 </div>
               </div>
+            </div>
             </div>
           </Reveal>
         </div>
