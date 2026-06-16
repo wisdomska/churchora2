@@ -91,15 +91,27 @@ module.exports = async function handler(req, res) {
     }
 
     // ── Path 2: FormSubmit (keyless fallback) ──
+    // FormSubmit blocks requests without a browser-like Origin/Referer/UA, so
+    // we present the site's origin (Node fetch permits setting these headers).
+    const site = "https://churchora2.vercel.app";
     const r = await fetch("https://formsubmit.co/ajax/" + encodeURIComponent(to), {
       method: "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Origin": site,
+        "Referer": site + "/",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      },
       body: JSON.stringify({ _subject: subject, _captcha: "false", _template: "table", _replyto: email, ...fields }),
     });
     const data = await r.json().catch(() => ({}));
-    const ok = r.ok && (data.success === true || data.success === "true");
-    if (ok) return res.status(200).json({ ok: true, via: "formsubmit" });
-    return res.status(502).json({ error: "Could not send the email.", detail: data.message || ("HTTP " + r.status) });
+    // success === "true" means delivered; the activation notice means it was
+    // accepted but the inbox still needs a one-time "Activate Form" click.
+    const msg = String(data.message || "");
+    const accepted = r.ok && (data.success === true || data.success === "true" || /activat/i.test(msg));
+    if (accepted) return res.status(200).json({ ok: true, via: "formsubmit", pending: /activat/i.test(msg) || undefined });
+    return res.status(502).json({ error: "Could not send the email.", detail: msg || ("HTTP " + r.status) });
   } catch (err) {
     return res.status(500).json({ error: "Email send failed.", detail: String((err && err.message) || err) });
   }
